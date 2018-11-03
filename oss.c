@@ -8,7 +8,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
-
+int alrm;
+void timerKiller(int sign_no){
+        alrm = 1;
+}
+	
 void setRandomForkTime(unsigned int *seconds, unsigned int *nanoseconds, int *forkTimeSeconds, int *forkTimeNanoseconds){
         int randnum = rand()%3; // 0 to 2
 	*forkTimeSeconds = 0;
@@ -55,6 +59,12 @@ int isVectorFull(int bitVector[],int *isFull){
 }
 int main(int argc, char *argv[]){
 	srand(time(NULL));
+	alrm = 0;
+	
+	char* filename = malloc(sizeof(char));
+	filename = "log.txt";
+        FILE *logFile = fopen(filename, "a");
+	
 	int bitVector[18] = {0};
 	key_t strctkey = 0, semkey = 0, timekey = 0, qkey = 0;
 	int strctid = 0, randomSet = 0, isFull = 1, processRunning = 0, semid = 0, status = 0, timeid = 0, position = 0, forkTimeSeconds = 0, forkTimeNanoseconds = 0, qid = 0, terminatingPID = 0, processTerminating = 0; 
@@ -77,7 +87,8 @@ int main(int argc, char *argv[]){
 	initHPQueue();
  	*quantum = 1000000;
 	int forked = 0;
-	
+	signal(SIGALRM, timerKiller);
+        alarm(2);
 	do{
 		printf("!!!!Seconds: %d Nano: %d\n", *seconds, *nanoseconds);
 		printf("BEFORE WAIT\n");
@@ -106,7 +117,7 @@ int main(int argc, char *argv[]){
 				checkArrPosition(pcbPtr, &position);
 				//printf("position %d\n", position);
 				createArgs(sharedStrctMem, sharedSemMem, sharedTimeMem, qMem, sharedArrayPosition, strctid, semid, timeid, qid, position);
-				forkChild(&pcbPtr ,pid, sharedStrctMem, sharedSemMem, sharedTimeMem, qMem, sharedArrayPosition, &position);	
+				forkChild(&pcbPtr ,pid, sharedStrctMem, sharedSemMem, sharedTimeMem, qMem, sharedArrayPosition, &position, seconds, nanoseconds, logFile);	
 				forked++;
 				randomSet = 0;
 			}
@@ -123,6 +134,9 @@ int main(int argc, char *argv[]){
 			if(processTerminating == 1){
 				addUserCPUTimeToClock(pcbPtr, position, seconds, nanoseconds);
 				printf("BEFORE WAITPID FOR %d\n", pcbPtr[position].pid);
+				sem_wait(sem);
+				pcbPtr[position].msgReceived = 1;
+				sem_post(sem);
 				if(pcbPtr[position].terminating == 1){
 					if(waitpid(pcbPtr[position].pid, &status, WUNTRACED) == terminatingPID){
 						//CLEAR PCB SHIT
@@ -145,6 +159,7 @@ int main(int argc, char *argv[]){
        		                        	}
 						kill(pcbPtr[position].pid, SIGTERM);
 					}
+					kill(pcbPtr[position].pid, SIGTERM);
 				}
 			}
 		} else if(isFull == 1){
@@ -159,10 +174,12 @@ int main(int argc, char *argv[]){
                         }
 			enqueueReadyProcess(pcbPtr);
                         if(isHPQueueEmpty() == 0){
+				fprintf(logFile, "OSS: Dequeueing user %u at %u.%u\n", pcbPtr[position].pid, *seconds, *nanoseconds);
                                 dequeueHP(pcbPtr, &position);
 				printf("PCB FLAG POS %d\n", pcbPtr[position].flag);
                                 pcbPtr[position].flag = 1;
                         } else if (isLPQueueEmpty() == 0){
+				fprintf(logFile, "OSS: Dequeueing user %u at %u.%u\n", pcbPtr[position].pid, *seconds, *nanoseconds);
                                 dequeueLP(pcbPtr, &position);	
 				printf("PCB FLAG POS %d\n", pcbPtr[position].flag);
                                 pcbPtr[position].flag = 1;
@@ -171,6 +188,7 @@ int main(int argc, char *argv[]){
                         if(processTerminating == 1){
                                 addUserCPUTimeToClock(pcbPtr, position, seconds, nanoseconds);
 				pcbPtr[position].msgReceived = 1;
+				fprintf(logFile, "OSS: killing process %d\n", pcbPtr[position].pid);
                                 if(waitpid(pcbPtr[position].pid, &status, WUNTRACED) == terminatingPID){
                                         int i;
         	                        clearPCB(pcbPtr, position);        
@@ -193,17 +211,17 @@ int main(int argc, char *argv[]){
 		}
 		printf("FORKED: %d\n", forked);
 		sem_post(sem);
-	}while((forked < 100)); 
+	}while((forked < 100) && alrm == 0); 
 	int i = 0;
 	for(i = 0; i < 2; i++){
 		//printf("The total struct values are: \n totalCpuTime %d\n totalTimeAlive %d\n timeSinceLastBurst %d\n processPriority %d\n position %d\n flag %d\n isSet %d\n terminating %d\n pid %d\n", pcbPtr[i].totalCpuTime, pcbPtr[i].totalTimeAlive, pcbPtr[i].timeSinceLastBurst, pcbPtr[i].processPriority, pcbPtr[i].position, pcbPtr[i].flag, pcbPtr[i].isSet, pcbPtr[i].terminating, pcbPtr[i].pid);
 	}
 	printf("OSS: OUT OF LOOP\n");	
-	while((pid = wait(&status) > 0));
+	//while((pid = wait(&status) > 0));
 	//int i = 0;
 	//for(i = 0; i < 18; i++) 
 	//	printf("The value is %d\n", pcbPtr[i].position);
- 
+ 	fclose(logFile);
         sem_destroy(sem);
         shmdt(pcbPtr);
         shmdt(sem);
@@ -213,5 +231,6 @@ int main(int argc, char *argv[]){
         shmctl(strctid, IPC_RMID, NULL);
         shmctl(semid, IPC_RMID, NULL);
 	shmctl(timeid, IPC_RMID, NULL);
+	kill(0, SIGTERM);
 	return 0;
 }

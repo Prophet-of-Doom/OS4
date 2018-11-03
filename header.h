@@ -30,7 +30,7 @@ typedef struct PCB{
 	int processPriority;
 	int position;
 	int flag;
-	
+	int waitingToQueue;	
 	int isSet;
 	int terminating;
 	int isRunning;
@@ -66,8 +66,13 @@ char strctMem[10], semMem[10], timeMem[10], qMem[10], arrayPosition[10];
 void getTimeToWait(unsigned int *seconds, unsigned int *nanoseconds, unsigned int *waitToQueue_seconds, unsigned int *waitToQueue_nano){
 	unsigned int tempSeconds =  (rand()%6);
 	unsigned int tempNano = (rand()%1001);
+	printf("temp seconds %d temp nano %d", tempSeconds, tempNano);
 	*waitToQueue_seconds = seconds[0]+tempSeconds;
-	*waitToQueue_nano = seconds[0]+tempNano;
+	*waitToQueue_nano = nanoseconds[0]+tempNano;
+	if(*waitToQueue_nano >= 1000000000){
+		*waitToQueue_seconds += 1;
+		*waitToQueue_nano -= 1000000000;
+	}
 }
 
 void getTimeSinceLastBurst(PCB *sptr, int position, unsigned int *seconds, unsigned int *nanoseconds, unsigned int *tempTimeSinceLastBurst_seconds, unsigned int *tempTimeSinceLastBurst_nano){
@@ -90,12 +95,18 @@ void getAction(PCB**sptr,int position, unsigned int **seconds, unsigned int **na
 		(*sptr[position]).terminating = 1;
 		getUserTotalSystemTime(*sptr, position, *seconds, *nanoseconds, tempTimeInSystem_seconds, tempTimeInSystem_nano);
 		getTimeSinceLastBurst( *sptr, position, *seconds, *nanoseconds, tempTimeSinceLastBurst_seconds, tempTimeSinceLastBurst_nano);
-        } else if (randNum <= 39){
-                (*sptr[position]).terminating = 1;
-        } else if (randNum <= 69){
+        } else if (randNum > 9 && randNum <= 39){
+		getUserTotalSystemTime(*sptr, position, *seconds, *nanoseconds, tempTimeInSystem_seconds, tempTimeInSystem_nano);
+                getTimeSinceLastBurst( *sptr, position, *seconds, *nanoseconds, tempTimeSinceLastBurst_seconds, tempTimeSinceLastBurst_nano);
+        } else if (randNum > 39 && randNum <= 69){
+		getUserTotalSystemTime(*sptr, position, *seconds, *nanoseconds, tempTimeInSystem_seconds, tempTimeInSystem_nano);
+                getTimeSinceLastBurst( *sptr, position, *seconds, *nanoseconds, tempTimeSinceLastBurst_seconds, tempTimeSinceLastBurst_nano);
+		(*sptr[position]).waitingToQueue = 1;
 		getTimeToWait(*seconds, *nanoseconds, waitToQueue_seconds, waitToQueue_nano);
 		(*sptr[position]).isSet = 0;
 	} else {
+		getUserTotalSystemTime(*sptr, position, *seconds, *nanoseconds, tempTimeInSystem_seconds, tempTimeInSystem_nano);
+                getTimeSinceLastBurst( *sptr, position, *seconds, *nanoseconds, tempTimeSinceLastBurst_seconds, tempTimeSinceLastBurst_nano);
 		randNum = ((rand()%98)+1);
 		int percentTimeUsed = ((randNum / 100)**quantum);
 		(*sptr[position]).totalCPUTimeUsed_nano += percentTimeUsed;
@@ -121,6 +132,7 @@ void getUserTotalSystemTime(PCB *sptr, int position, unsigned int *seconds, unsi
 }
 
 void setQuantum(PCB *sptr, int position, int *quantum, int *localQuantum){
+	*quantum = 10;
 	if(sptr[position].processPriority == 0){
 		*localQuantum = (quantum[0]/2);
 	} else {
@@ -142,6 +154,7 @@ void clearPCB(PCB*sptr, int position){
         sptr[position].terminating = 0;
         sptr[position].isRunning = 0;
 	sptr[position].msgReceived = 0;
+	sptr[position].waitingToQueue = 0;
 }
 
 void addUserCPUTimeToClock(PCB * sptr, int position, unsigned int* seconds, unsigned int* nanoseconds){
@@ -171,24 +184,15 @@ void checkForTerminatingProcesses(PCB *sptr, int *position, int *terminatingPID,
 	}
 };
 
-void howMuchQuantum(PCB *sptr, int localQuantum, int position){
+void howMuchQuantum(PCB *sptr, int *localQuantum, int position){
 	int random = (rand()%2);
 	if (random == 0){
-		sptr[position].totalCPUTime_nano += localQuantum;
+		//sptr[position].totalCPUTime_nano += localQuantum;
 	} else {
-		int randtime = (rand()%(localQuantum+1));
-		sptr[position].totalCPUTime_nano += randtime;
+		//int randtime = (rand()%(localQuantum+1));
+		//sptr[position].totalCPUTime_nano += randtime;
+		*localQuantum = rand()%(*localQuantum+1);
 	} 
-}
-
-void randomAction(PCB *sptr, int localQuantum, int position){
-	int randNum = (rand()%99);
-	if(randNum <= 9){
-		sptr[position].terminating = 1;
-	} else if (randNum <= 29){
-		howMuchQuantum(sptr, localQuantum, position);
-		sptr[position].terminating = 1;
-	} //else if (randNum <= 
 }
 
 void createSharedMemKeys(key_t *strctKey, key_t *semKey, key_t *timeKey, key_t *qKey){
@@ -245,6 +249,7 @@ void setPriority(PCB *sptr,int position){
 };
 
 void initializeUser(PCB *pcbPtr, int PCBposition, unsigned int **seconds, unsigned int **nanoseconds, unsigned int *tempTimeInSystem_seconds, unsigned int *tempTimeInSystem_nano){
+	srand(time(NULL));
 	pcbPtr[PCBposition].pid = getpid();
 	printf("USER PID %d\n", getpid());
 	pcbPtr[PCBposition].isSet = 1;
@@ -261,26 +266,30 @@ void initializeUser(PCB *pcbPtr, int PCBposition, unsigned int **seconds, unsign
 	//pcbPtr[position].processPriority = 130;
 };
 
-void forkChild(PCB **sptr, pid_t pid, char *strctMem, char *semMem, char *timeMem, char *qMem, char *arrayPosition, int *position){
+void forkChild(PCB **sptr, pid_t pid, char *strctMem, char *semMem, char *timeMem, char *qMem, char *arrayPosition, int *position, unsigned int *seconds, unsigned int *nanoseconds, FILE *file){
 	setPriority(*sptr, *position);
 	if((pid = fork()) == 0){
+		fprintf(file, "OSS: Created a user %u at %u.%u\n", getpid(), *seconds, *nanoseconds);
+		fclose(file);
 		execlp("./user", "./user", strctMem, semMem, timeMem, qMem, arrayPosition, NULL);
 	}
 	//printf("position in forkchild: %d\n", *arrayPosition);
 	updateVector(bitVector);
+	
 };
 
 void enqueueReadyProcess(PCB *sptr){
 	int i;
 	for(i = 0; i < 18; i++){
+		if(sptr[i].waitingToQueue == 0){
 			if(sptr[i].isSet == 1){
-			if(sptr[i].processPriority == 1){
-				enqueueHP(sptr, i);
+				if(sptr[i].processPriority == 1){
+					enqueueHP(sptr, i);
 			
-			} else {
-				enqueueLP(sptr, i);
-		
-			}	
+				} else {
+					enqueueLP(sptr, i);
+				}	
+			}
 		}
 	}
 };
@@ -398,6 +407,7 @@ pid_t dequeueHP(PCB *sptr, int *position){
 
 pid_t dequeueLP(PCB *sptr, int *position){	
 	printf("DEQUEUEING LP %d\n", sptr[*position].pid);
+	
 	QNode *temp;
         if(isLPQueueEmpty()){
                 return FALSE;
