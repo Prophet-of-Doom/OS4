@@ -125,20 +125,28 @@ int main(int argc, char *argv[]){
 			//sleep(1);
 			enqueueReadyProcess(pcbPtr);
 			if(isHPQueueEmpty() == 0){
+				fprintf(logFile, "OSS: Dequeueing user %u at %u.%u\n", pcbPtr[position].pid, *seconds
+, *nanoseconds);
 				dequeueHP(pcbPtr, &position);
 				pcbPtr[position].flag = 1;
 			} else if (isLPQueueEmpty() == 0){
+				fprintf(logFile, "OSS: Dequeueing user %u at %u.%u\n", pcbPtr[position].pid, *seconds
+, *nanoseconds);
 				dequeueLP(pcbPtr, &position);
 				pcbPtr[position].flag = 1;
 			}
 			checkForTerminatingProcesses(pcbPtr, &position, &terminatingPID, &processTerminating);
 			if(processTerminating == 1){
+				fprintf(logFile, "OSS: Killing process %u at %u.%u\n", pcbPtr[position].pid, *seconds
+, *nanoseconds);
 				addUserCPUTimeToClock(pcbPtr, position, seconds, nanoseconds);
 				printf("X BEFORE WAITPID FOR %d\n", pcbPtr[position].pid);
 				//sem_wait(sem);
 				pcbPtr[position].msgReceived = 1;
 				//sem_post(sem);
 				printf("X after sem_wait for terminating");
+				fprintf(logFile, "OSS: process %u was alive for %u.%u\n", pcbPtr[position].pid, *seconds
+, *nanoseconds);
 				if(pcbPtr[position].terminating == 1){
 					if(waitpid(pcbPtr[position].pid, &status, WUNTRACED) == terminatingPID){
 						//CLEAR PCB SHIT

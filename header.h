@@ -41,6 +41,7 @@ typedef struct PCB{
 typedef struct QNodeType{
 	PCB *qptr;
 	struct QNodeType *next;
+	//struct QNodeType *currentNode;
 }QNode;
 
 int enqueueHP(PCB *sptr, int position);
@@ -118,17 +119,24 @@ void getAction(PCB**sptr,int position, unsigned int **seconds, unsigned int **na
 }
 
 void getUserTotalSystemTime(PCB *sptr, int position, unsigned int *seconds, unsigned int *nanoseconds, unsigned int *tempTimeInSystem_seconds, unsigned int *tempTimeInSystem_nano){
-	 if(sptr[position].totalTimeInSystem_seconds== 0 && sptr[position].totalTimeInSystem_nano == 0){
-                *tempTimeInSystem_seconds = seconds[0];
+	printf("1\n");
+	 if(sptr[position].totalTimeInSystem_seconds == 0 && sptr[position].totalTimeInSystem_nano == 0){
+               printf("2\n");
+		 *tempTimeInSystem_seconds = seconds[0];
                 *tempTimeInSystem_nano = nanoseconds[0];
         } else {
+		printf("3\n");
                 sptr[position].totalTimeInSystem_seconds = seconds[0] - *tempTimeInSystem_seconds;
-                if(nanoseconds[0] < *tempTimeInSystem_nano){
+                printf("4\n");
+		if(nanoseconds[0] < *tempTimeInSystem_nano){
                         sptr[position].totalTimeInSystem_nano = sptr[position].totalTimeInSystem_nano - nanoseconds[0];
-                } else {
+                printf("5\n");
+		} else {
                         sptr[position].totalTimeInSystem_nano = nanoseconds[0] - sptr[position].totalTimeInSystem_nano;
-       		}
+       		printf("6\n");
+		}
 	}
+	printf("7\n");
 }
 
 void setQuantum(PCB *sptr, int position, int *quantum, int *localQuantum){
@@ -365,6 +373,12 @@ int enqueueHP(PCB *sptr, int position){
 	} else {
 		tailHP -> next = temp;
 		tailHP = temp;
+	}
+		
+	QNode *currentNode = headHP;
+	while(currentNode != NULL){
+		printf("user: in the queue %d -- \n", currentNode->qptr[0].pid);
+		currentNode = currentNode->next;
 	}
 	return TRUE; 
 };
