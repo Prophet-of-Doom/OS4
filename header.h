@@ -182,6 +182,7 @@ void checkForTerminatingProcesses(PCB *sptr, int *position, int *terminatingPID,
 			return; 
 		}
 	}
+	*processTerminating = 0;
 };
 
 void howMuchQuantum(PCB *sptr, int *localQuantum, int position){

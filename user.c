@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
 	int localQuantum = NULL;
 	unsigned int tempTimeInSystem_seconds = 0, tempTimeInSystem_nano = 0, tempTimeSinceLastBurst_seconds = 0, tempTimeSinceLastBurst_nano = 0, waitToQueue_seconds = 0, waitToQueue_nano = 0; 		
         attachToSharedMemory(&pcbPtr, &sem, &seconds, &nanoseconds, &quantum, semid, strctid, timeid, qid);
-	initializeSemaphores(&sem);
+	//initializeSemaphores(&sem);
 	
 	sem_wait(sem);
 	pcbPtr[PCBposition].position = PCBposition;
@@ -67,6 +67,7 @@ int main(int argc, char *argv[]) {
 		sem_wait(sem);
 		pcbPtr[PCBposition].isRunning = 1;
 		if(pcbPtr[PCBposition].flag == 1){
+			sem_post(sem);
 			while(1){//pcbPtr[PCBposition].msgReceived == 0){
 				sem_wait(sem); 
 				//pcbPtr[PCBposition].isRunning = 1;
@@ -100,11 +101,15 @@ int main(int argc, char *argv[]) {
 			sem_post(sem);
 		}
 	}
-	
+	printf("User %d is outside of the while loop\n", pcbPtr[PCBposition].pid);
 	while(1){
 		if(pcbPtr[PCBposition].msgReceived == 1){
+			printf("User %d Message received\n", pcbPtr[PCBposition].pid);
 			getUserTotalSystemTime(sptr, position, seconds, nanoseconds, &tempTimeInSystem_seconds, &tempTimeInSystem_nano);
-		       	 getTimeSinceLastBurst( sptr, position, seconds, nanoseconds, &tempTimeSinceLastBurst_seconds, &tempTimeSinceLastBurst_nano);	
+			printf("got total system time\n");
+		       	getTimeSinceLastBurst( sptr, position, seconds, nanoseconds, &tempTimeSinceLastBurst_seconds, &tempTimeSinceLastBurst_nano);	
+			printf("got time since last burst\n");
+			pcbPtr[PCBposition].isRunning = 0;
 			printf("User Position: %d PID: %d IS TERMINATING\n",PCBposition, pcbPtr[PCBposition].pid);
 		       	 pcbPtr[PCBposition].terminating = 0;
 			sem_destroy(sem);

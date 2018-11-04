@@ -44,6 +44,7 @@ int checkForRunning(PCB *pcbPtr,int *processRunning){
 			return *processRunning;
 		}
 	}
+	*processRunning = 0;
 	return *processRunning;
 }
 int isVectorFull(int bitVector[],int *isFull){
@@ -87,8 +88,8 @@ int main(int argc, char *argv[]){
 	initHPQueue();
  	*quantum = 1000000;
 	int forked = 0;
-	signal(SIGALRM, timerKiller);
-        alarm(2);
+	//signal(SIGALRM, timerKiller);
+        //alarm(2);
 	do{
 		printf("!!!!Seconds: %d Nano: %d\n", *seconds, *nanoseconds);
 		printf("BEFORE WAIT\n");
@@ -133,10 +134,11 @@ int main(int argc, char *argv[]){
 			checkForTerminatingProcesses(pcbPtr, &position, &terminatingPID, &processTerminating);
 			if(processTerminating == 1){
 				addUserCPUTimeToClock(pcbPtr, position, seconds, nanoseconds);
-				printf("BEFORE WAITPID FOR %d\n", pcbPtr[position].pid);
-				sem_wait(sem);
+				printf("X BEFORE WAITPID FOR %d\n", pcbPtr[position].pid);
+				//sem_wait(sem);
 				pcbPtr[position].msgReceived = 1;
-				sem_post(sem);
+				//sem_post(sem);
+				printf("X after sem_wait for terminating");
 				if(pcbPtr[position].terminating == 1){
 					if(waitpid(pcbPtr[position].pid, &status, WUNTRACED) == terminatingPID){
 						//CLEAR PCB SHIT
